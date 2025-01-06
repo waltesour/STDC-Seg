@@ -9,8 +9,8 @@ import torchvision
 
 
 from nets.stdcnet import STDCNet1446, STDCNet813
-from modules.bn import InPlaceABNSync as BatchNorm2d
-# BatchNorm2d = nn.BatchNorm2d
+# from modules.bn import InPlaceABNSync as BatchNorm2d
+BatchNorm2d = nn.BatchNorm2d
 
 class ConvBNReLU(nn.Module):
     def __init__(self, in_chan, out_chan, ks=3, stride=1, padding=1, *args, **kwargs):
@@ -21,8 +21,8 @@ class ConvBNReLU(nn.Module):
                 stride = stride,
                 padding = padding,
                 bias = False)
-        # self.bn = BatchNorm2d(out_chan)
-        self.bn = BatchNorm2d(out_chan, activation='none')
+        self.bn = BatchNorm2d(out_chan)
+        # self.bn = BatchNorm2d(out_chan, activation='none')
         self.relu = nn.ReLU()
         self.init_weight()
 
@@ -74,15 +74,16 @@ class AttentionRefinementModule(nn.Module):
         super(AttentionRefinementModule, self).__init__()
         self.conv = ConvBNReLU(in_chan, out_chan, ks=3, stride=1, padding=1)
         self.conv_atten = nn.Conv2d(out_chan, out_chan, kernel_size= 1, bias=False)
-        # self.bn_atten = BatchNorm2d(out_chan)
-        self.bn_atten = BatchNorm2d(out_chan, activation='none')
+        self.bn_atten = BatchNorm2d(out_chan)
+        # self.bn_atten = BatchNorm2d(out_chan, activation='none')
 
         self.sigmoid_atten = nn.Sigmoid()
         self.init_weight()
 
     def forward(self, x):
         feat = self.conv(x)
-        atten = F.avg_pool2d(feat, feat.size()[2:])
+        # atten = F.avg_pool2d(feat, feat.size()[2:])
+        atten =  F.adaptive_avg_pool2d(feat, (1, 1))
         atten = self.conv_atten(atten)
         atten = self.bn_atten(atten)
         atten = self.sigmoid_atten(atten)
@@ -131,12 +132,13 @@ class ContextPath(nn.Module):
     def forward(self, x):
         H0, W0 = x.size()[2:]
 
-        feat2, feat4, feat8, feat16, feat32 = self.backbone(x)
+        feat2, feat4, feat8, feat16, feat32 = self.backbone(x) #STDC主干网络每个stage输出结果
         H8, W8 = feat8.size()[2:]
         H16, W16 = feat16.size()[2:]
         H32, W32 = feat32.size()[2:]
         
-        avg = F.avg_pool2d(feat32, feat32.size()[2:])
+        # avg = F.avg_pool2d(feat32, feat32.size()[2:])
+        avg =  F.adaptive_avg_pool2d(feat32, (1, 1))
 
         avg = self.conv_avg(avg)
         avg_up = F.interpolate(avg, (H32, W32), mode='nearest')
@@ -194,7 +196,8 @@ class FeatureFusionModule(nn.Module):
     def forward(self, fsp, fcp):
         fcat = torch.cat([fsp, fcp], dim=1)
         feat = self.convblk(fcat)
-        atten = F.avg_pool2d(feat, feat.size()[2:])
+        # atten = F.avg_pool2d(feat, feat.size()[2:])
+        atten = F.adaptive_avg_pool2d(feat, (1, 1))
         atten = self.conv1(atten)
         atten = self.relu(atten)
         atten = self.conv2(atten)
@@ -255,7 +258,7 @@ class BiSeNet(nn.Module):
             exit(0)
 
         self.ffm = FeatureFusionModule(inplane, 256)
-        self.conv_out = BiSeNetOutput(256, 256, n_classes)
+        self.conv_out = BiSeNetOutput(256, 256, n_classes) # BiSeNetOutput = 3*3Conv-BN-Relu-1*1Conv
         self.conv_out16 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
         self.conv_out32 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
 
@@ -269,25 +272,25 @@ class BiSeNet(nn.Module):
     def forward(self, x):
         H, W = x.size()[2:]
         
-        feat_res2, feat_res4, feat_res8, feat_res16, feat_cp8, feat_cp16 = self.cp(x)
+        feat_res2, feat_res4, feat_res8, feat_res16, feat_cp8, feat_cp16 = self.cp(x) #sp表示spatial Path空间路径
 
-        feat_out_sp2 = self.conv_out_sp2(feat_res2)
+        feat_out_sp2 = self.conv_out_sp2(feat_res2) # feat_out_sp4 是直接stage1的结果
 
-        feat_out_sp4 = self.conv_out_sp4(feat_res4)
+        feat_out_sp4 = self.conv_out_sp4(feat_res4) # feat_out_sp4 是直接stage2的结果
   
-        feat_out_sp8 = self.conv_out_sp8(feat_res8)
+        feat_out_sp8 = self.conv_out_sp8(feat_res8) # feat_out_sp8 是直接stage3的结果
 
-        feat_out_sp16 = self.conv_out_sp16(feat_res16)
+        feat_out_sp16 = self.conv_out_sp16(feat_res16) # feat_out_sp16 是直接stage4的结果
 
-        feat_fuse = self.ffm(feat_res8, feat_cp8)
+        feat_fuse = self.ffm(feat_res8, feat_cp8) #cp表示context path空间路径
 
         feat_out = self.conv_out(feat_fuse)
         feat_out16 = self.conv_out16(feat_cp8)
         feat_out32 = self.conv_out32(feat_cp16)
 
-        feat_out = F.interpolate(feat_out, (H, W), mode='bilinear', align_corners=True)
-        feat_out16 = F.interpolate(feat_out16, (H, W), mode='bilinear', align_corners=True)
-        feat_out32 = F.interpolate(feat_out32, (H, W), mode='bilinear', align_corners=True)
+        feat_out = F.interpolate(feat_out, (H, W), mode='bilinear', align_corners=True) # feat_out 是经过 FFM - 8x 的结果
+        feat_out16 = F.interpolate(feat_out16, (H, W), mode='bilinear', align_corners=True) # feat_out16 是stage4的结果经过 ARM - 8x 的结果
+        feat_out32 = F.interpolate(feat_out32, (H, W), mode='bilinear', align_corners=True) # feat_out32 是stage5的结果经过 ARM - 8x 的结果
 
 
         if self.use_boundary_2 and self.use_boundary_4 and self.use_boundary_8:
