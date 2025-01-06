@@ -1,3 +1,48 @@
+# @Author  : SONG SHUXIANG
+# @Time    : 2024/12/23
+# @Func    : 记录STDC-Seg语义分割网络的使用方式
+
+## 1、数据格式(按照如下文件夹层级)：
+    dspth
+    ├── images
+    │    └── train
+    │    └── val
+    └── labels_png (png中背景灰度值0,其他类别灰度值按照 1、2 顺延)
+    │    └── train
+    │    └── val
+注：
+    json_to_png.py脚本可以将labelme标注的 json格式分割数据 转换成 png格式的分割图像,使用EiSeg标注工具可以标注png格式的数据
+    (或者根据json中数据信息由通义千问生成合适的代码)
+
+## 2、训练命令：train.sh
+    相比原始代码改动如下：
+    修改 model_stages.py中 InPlaceABNSync表示的BatchNorm2d函数为torch.nn.BatchNorm2d
+    修改 model_stages.py中 F.avg_pool2d 为 F.adaptive_avg_pool2d (adaptive_avg_pool2d不需要变量做输入,这样导出动态onnx的时候不报错)
+    修改 testdata.py 中get_label_path函数中png_path路径(test_data.py是重写的数据读取部分) 
+    修改 train_bbdd.py(train.py是源码中原始文件,不用)中如下
+    --- n_classes 为类别数目
+    --- respath 模型训练完成后的保存路径
+    --- dspth 训练数据所在路径
+    --- max_iter 最大迭代次数,修改成100000以上有较好效果
+    --- pretrain_path 提前下载的预训练模型文件
+注：
+    预训练模型的下载地址： 
+    - BaiduYun Link: https://pan.baidu.com/s/1OdMsuQSSiK1EyNs6_KiFIw Password: q7dt
+    - GoogleDrive Link: https://drive.google.com/drive/folders/1wROFwRt8qWHD4jSo8Zu1gp1d6oYJ3ns1?usp=sharing
+    
+## 3、推理命令：predict.sh
+    修改 predict.py 中如下 
+    --- respth 为训练得到的模型路径
+    --- dspth 为测试数据集的路径
+    --- outpth 为验证结果的保存路径
+
+## 4、转onnx推理
+    export.py 修改：
+    --- save_pth_path为训练得到的pth模型路径, onnx模型将保存在pth同级目录下
+    --- output_names 网络有多少输出 output_names 就设定几个名称
+    --- dynamic_axes 参数可以指定输出中哪个维度是可变的
+*************************************************************************************************************
+
 # Rethinking BiSeNet For Real-time Semantic Segmentation[[PDF](https://openaccess.thecvf.com/content/CVPR2021/papers/Fan_Rethinking_BiSeNet_for_Real-Time_Semantic_Segmentation_CVPR_2021_paper.pdf)]
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
