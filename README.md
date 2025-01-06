@@ -1,6 +1,6 @@
-# @Author  : SONG SHUXIANG
-# @Time    : 2024/12/23
-# @Func    : 记录STDC-Seg语义分割网络的使用方式
+@ Author  : SONG SHUXIANG
+@ Time    : 2024/12/23
+@ Func    : 记录STDC-Seg语义分割网络的使用方式
 
 ## 1、数据格式(按照如下文件夹层级)：
     dspth
