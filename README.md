@@ -38,7 +38,7 @@
 
 ## 4、转onnx推理
     export.py 修改：
-    --- from models.model_stages import BiSeNet 修改为 models.model_stages_export 
+    --- from models.model_stages import BiSeNet 修改为 models.model_stages_export import BiSeNet 
     --- save_pth_path为训练得到的pth模型路径, onnx模型将保存在pth同级目录下
     --- output_names 网络有多少输出 output_names 就设定几个名称
     --- dynamic_axes 参数可以指定输出中哪个维度是可变的
